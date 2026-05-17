@@ -19,4 +19,11 @@ export const LOCATIONS = [
   "Research Base in Antarctica",
   "High-Tech Startup Office",
   "Prison",
+  "Harel's Apartment",
+  "College of Management",
+  "Student Housing",
+  "Outdoor Party",
+  "Prague",
+  "Sea of Galilee",
+  "Eilat",
 ] as const;

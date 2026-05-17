@@ -12,6 +12,7 @@ import {
   subscribeVotes,
   submitVote,
   transitionToVoting,
+  updateLobbySpyCount,
 } from "../firebase/roomService";
 import Lobby from "./Lobby";
 import GameTimer from "./GameTimer";
@@ -22,11 +23,28 @@ import PlayerList from "./PlayerList";
 
 const NAME_KEY = "skyfall.playerName";
 
-function PhaseLabel({ title, subtitle }: { title: string; subtitle?: string }) {
+function PhaseLabel({
+  badge,
+  title,
+  subtitle,
+}: {
+  badge?: string;
+  title: string;
+  subtitle?: string;
+}) {
   return (
-    <div className="mb-6">
-      <h2 className="text-xl font-bold text-slate-50">{title}</h2>
-      {subtitle && <p className="mt-2 text-base text-slate-400">{subtitle}</p>}
+    <div className="mb-5">
+      <div className="flex flex-wrap items-center gap-2">
+        {badge && (
+          <span className="rounded-full bg-slate-800/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+            {badge}
+          </span>
+        )}
+      </div>
+      <h2 className={`text-balance text-2xl font-extrabold tracking-tight text-slate-50 ${badge ? "mt-3" : ""}`}>
+        {title}
+      </h2>
+      {subtitle && <p className="mt-2 text-pretty text-base leading-relaxed text-slate-400">{subtitle}</p>}
     </div>
   );
 }
@@ -134,6 +152,17 @@ export default function RoomPage() {
     room?.durationSeconds,
   ]);
 
+  useEffect(() => {
+    if (!roomCode || !uid || !room || room.status !== "lobby") return;
+    if (room.hostId !== uid) return;
+    const maxSpies = Math.max(1, players.length - 1);
+    const current = typeof room.spyCount === "number" ? room.spyCount : 1;
+    const clamped = Math.min(Math.max(1, current), maxSpies);
+    if (current !== clamped) {
+      void updateLobbySpyCount(roomCode, uid, clamped);
+    }
+  }, [players.length, room, room?.hostId, room?.spyCount, room?.status, roomCode, uid]);
+
   const currentPlayer = uid ? players.find((p) => p.id === uid) : undefined;
   const isHost = currentPlayer?.isHost ?? false;
   const needsJoin = Boolean(uid && room && !currentPlayer);
@@ -176,6 +205,22 @@ export default function RoomPage() {
     }
   }, [roomCode, uid]);
 
+  const handleSpyCountChange = useCallback(
+    async (next: number) => {
+      if (!roomCode || !uid) return;
+      setBusy(true);
+      setError(null);
+      try {
+        await updateLobbySpyCount(roomCode, uid, next);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not update spy count.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [roomCode, uid],
+  );
+
   const handleVote = useCallback(
     async (votedPlayerId: string) => {
       if (!roomCode || !uid) return;
@@ -207,10 +252,10 @@ export default function RoomPage() {
 
   if (!roomCode || roomCode.length < 4) {
     return (
-      <div className="mx-auto max-w-md px-4 py-16 text-center">
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 pb-safe pt-safe text-center">
         <p className="text-slate-400">That link does not contain a valid room code.</p>
         <Link
-          className="mt-8 inline-flex rounded-xl bg-sky-500 px-8 py-4 font-bold text-sky-950"
+            className="touch-hit mt-8 inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-gradient-to-b from-sky-400 to-sky-600 px-8 py-3 text-[1.05rem] font-bold text-slate-950 shadow-lg shadow-sky-950/30"
           to="/"
         >
           Go home
@@ -221,20 +266,20 @@ export default function RoomPage() {
 
   if (authLoading) {
     return (
-      <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4">
-        <p className="text-center text-lg text-slate-400">Signing you in…</p>
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 pt-safe pb-safe">
+        <p className="text-center text-[1.05rem] font-medium text-slate-400">Connecting your session…</p>
       </div>
     );
   }
 
   if (!uid) {
     return (
-      <div className="mx-auto max-w-md px-4 py-16 text-center">
+      <div className="mx-auto max-w-md px-4 pb-safe pt-16 text-center">
         <p className="text-slate-400">We could not start an anonymous session.</p>
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="mt-8 w-full rounded-xl border border-slate-700 bg-slate-900 py-4 text-lg font-semibold text-slate-50"
+          className="touch-hit mt-8 w-full rounded-2xl border border-slate-700 bg-slate-900 py-4 text-[1.05rem] font-semibold text-slate-50 shadow-lg shadow-black/25"
         >
           Back home
         </button>
@@ -250,12 +295,12 @@ export default function RoomPage() {
         <p className="text-slate-400">Loading…</p>
       );
     return (
-      <div className="mx-auto max-w-md px-4 py-16 text-center">
+      <div className="mx-auto max-w-md px-4 pb-safe pt-16 text-center">
         <div>{body}</div>
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="mt-8 w-full rounded-xl border border-slate-700 bg-slate-900 py-4 text-lg font-semibold text-slate-50"
+          className="touch-hit mt-8 w-full rounded-2xl border border-slate-700 bg-slate-900 py-4 text-[1.05rem] font-semibold text-slate-50 shadow-lg shadow-black/25"
         >
           Back home
         </button>
@@ -264,43 +309,56 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="mx-auto min-h-dvh max-w-md px-4 py-8">
-      <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Room</p>
-          <p className="font-mono text-2xl font-bold tracking-[0.15em] text-sky-400">{roomCode}</p>
-        </div>
-        <button
-          type="button"
-          className="self-start rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300"
-          onClick={() => navigate("/")}
-        >
-          Leave
-        </button>
-      </div>
+    <div className="relative min-h-dvh overflow-x-hidden pb-safe pt-safe">
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 top-0 h-[min(52vh,360px)] bg-gradient-to-b from-sky-950/55 via-transparent to-transparent"
+      />
+
+      <div className="relative mx-auto min-h-dvh max-w-md px-4 pb-safe pt-6 sm:pt-10">
+        <header className="sticky top-0 z-40 -mx-4 mb-6 border-b border-slate-800/60 bg-slate-950/90 px-4 pb-4 pt-4 backdrop-blur-xl backdrop-saturate-150">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-slate-500">Room code</p>
+              <p className="mt-1.5 truncate font-mono text-2xl font-bold tracking-[0.12em] text-sky-300">
+                {roomCode}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="touch-hit shrink-0 rounded-2xl border border-slate-600/70 bg-slate-900/70 px-4 py-2.5 text-sm font-semibold text-slate-200 shadow-sm shadow-black/20 transition-colors active:bg-slate-800"
+              onClick={() => navigate("/")}
+            >
+              Leave
+            </button>
+          </div>
+        </header>
 
       {notice && (
-        <p className="mb-6 rounded-xl border border-emerald-600/60 bg-emerald-950/50 px-4 py-3 text-center text-emerald-200">
+        <p className="mb-6 rounded-2xl border border-emerald-500/35 bg-emerald-950/40 px-4 py-3 text-center text-sm font-medium leading-relaxed text-emerald-100 shadow-lg shadow-black/15">
           {notice}
         </p>
       )}
       {error && (
-        <p className="mb-6 rounded-xl border border-red-600/70 bg-red-950/60 px-4 py-3 text-red-100" role="alert">
+        <p className="mb-6 rounded-2xl border border-red-500/35 bg-red-950/55 px-4 py-3.5 text-sm font-medium leading-relaxed text-red-50 shadow-lg shadow-black/20" role="alert">
           {error}
         </p>
       )}
 
       {needsJoin && (
         <section className="space-y-5">
-          <PhaseLabel title="Join this room" subtitle="You are not in the player list yet." />
-          <form onSubmit={handleJoinRoom} className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+          <PhaseLabel badge="Join" title="Add yourself" subtitle="You are linked to this room but not in the roster yet." />
+          <form
+            onSubmit={handleJoinRoom}
+            className="space-y-4 rounded-3xl border border-slate-800/90 bg-slate-900/70 p-5 shadow-xl shadow-black/25"
+          >
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your name</span>
               <input
                 autoFocus
                 value={pendingName || storedName}
                 onChange={(e) => setPendingName(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-4 text-lg text-slate-100 placeholder:text-slate-600 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                className="touch-hit mt-2 w-full min-h-[52px] rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3.5 text-lg text-slate-100 placeholder:text-slate-600 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35"
                 placeholder="Display name"
                 maxLength={32}
               />
@@ -309,7 +367,7 @@ export default function RoomPage() {
             <button
               disabled={busy}
               type="submit"
-              className="w-full rounded-xl bg-emerald-500 py-5 text-xl font-bold text-emerald-950 disabled:opacity-40"
+              className="touch-hit w-full min-h-[54px] rounded-2xl bg-emerald-500 py-4 text-lg font-bold text-emerald-950 shadow-lg shadow-emerald-950/35 transition-[transform,filter] active:brightness-95 disabled:opacity-40"
             >
               Join players
             </button>
@@ -326,25 +384,32 @@ export default function RoomPage() {
 
       {!needsJoin && room.status === "lobby" && (
         <>
-          <PhaseLabel title="Lobby" subtitle="Everyone here should have the same verbal rules before you begin." />
+          <PhaseLabel badge="Lobby" title="Hang tight — almost there" subtitle="Align on rules out loud before the host kicks off." />
           <Lobby
             roomCode={roomCode}
             players={players}
             isHost={isHost}
             canStart={players.length >= 2}
+            spyCount={room.spyCount}
+            maxSpies={Math.max(1, players.length - 1)}
             busy={busy}
             onStart={handleStart}
             onShare={() => setNotice("Invite link copied!")}
+            onSpyCountChange={handleSpyCountChange}
           />
         </>
       )}
 
       {!needsJoin && room.status === "playing" && uid && (
         <>
-          <PhaseLabel title="Round in progress" subtitle="Discuss face to face — the app stays quiet." />
+          <PhaseLabel badge="Discuss" title={'Questions & bluffing'} subtitle="Talk in person — this screen stays private." />
           <div className="space-y-5">
             <GameTimer startedAt={room.startedAt} durationSeconds={room.durationSeconds} />
-            <SecretCard isSpy={room.spyId === uid} location={room.location} />
+            <SecretCard
+              isSpy={room.spyIds.includes(uid)}
+              location={room.location}
+              multipleSpies={(room.spyIds?.length ?? 0) > 1}
+            />
           </div>
           <div className="mt-10">
             <PlayerList players={players} />
@@ -354,7 +419,7 @@ export default function RoomPage() {
 
       {!needsJoin && room.status === "voting" && uid && (
         <>
-          <PhaseLabel title="Cast your suspicion" subtitle="Once everyone submits, scores appear automatically." />
+          <PhaseLabel badge="Vote" title="Point the finger" subtitle="Submit once everyone is ready — results unlock automatically." />
           <div className="space-y-6">
             <VotingPanel
               players={players}
@@ -369,7 +434,7 @@ export default function RoomPage() {
 
       {!needsJoin && room.status === "ended" && (
         <>
-          <PhaseLabel title="Results are in" />
+          <PhaseLabel badge="Reveal" title="How did it go?" />
           <ResultScreen
             room={room}
             players={players}
@@ -380,6 +445,7 @@ export default function RoomPage() {
           />
         </>
       )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,30 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+}
+
 html,
 body,
 #root {
@@ -7,5 +32,24 @@ body,
 }
 
 body {
-  @apply bg-slate-950 text-slate-100 antialiased;
+  @apply bg-slate-950 font-sans text-slate-100 antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  }
+  .pt-safe {
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+  }
+  .touch-hit {
+    touch-action: manipulation;
+  }
+  .animate-fade-up {
+    animation: fade-up 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.25s ease-out both;
+  }
 }

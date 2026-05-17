@@ -36,7 +36,7 @@ Restart `npm run dev` after edits.
 
 ### Firestore rules
 
-This MVP trusts the client UI to hide spy and location appropriately. Anyone with developer tools open can inspect `spyId` and `location`. For prototyping you may use permissive rules (replace before you ship publicly):
+This MVP trusts the client UI to hide spy and location appropriately. Anyone with developer tools open can inspect `spyIds` and `location`. For prototyping you may use permissive rules (replace before you ship publicly):
 
 ```plaintext
 rules_version = '2';

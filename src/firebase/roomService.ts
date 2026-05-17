@@ -36,6 +36,46 @@ function pickRandom<T>(items: readonly T[]): T {
   return items[Math.floor(Math.random() * items.length)]!;
 }
 
+function pickRandomDistinct<T>(pool: readonly T[], take: number): T[] {
+  if (take <= 0 || pool.length === 0) return [];
+  const arr = [...pool];
+  const n = Math.min(take, arr.length);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = arr[i];
+    arr[i] = arr[j]!;
+    arr[j] = t!;
+  }
+  return arr.slice(0, n);
+}
+
+/** Hydrate newer Room shape and legacy docs that stored only spyId */
+export function normalizeRoomFromFirestore(data: Record<string, unknown>, fallbackRoomCode: string): Room {
+  const spyIdsRaw = data.spyIds;
+  const legacySpyId = data.spyId;
+  let spyIds: string[] = [];
+  if (Array.isArray(spyIdsRaw) && spyIdsRaw.length > 0) {
+    spyIds = spyIdsRaw.filter((x): x is string => typeof x === "string");
+  } else if (typeof legacySpyId === "string" && legacySpyId.length > 0) {
+    spyIds = [legacySpyId];
+  }
+
+  let spyCount = 1;
+  const sc = data.spyCount;
+  if (typeof sc === "number" && Number.isFinite(sc)) {
+    spyCount = Math.max(1, Math.floor(sc));
+  }
+
+  const roomCode = typeof data.roomCode === "string" ? data.roomCode : fallbackRoomCode;
+
+  return {
+    ...(data as unknown as Omit<Room, "roomCode" | "spyIds" | "spyCount">),
+    roomCode,
+    spyIds,
+    spyCount,
+  };
+}
+
 export async function ensureAnonymousUser(): Promise<User> {
   if (auth.currentUser) return auth.currentUser;
   const { user } = await signInAnonymously(auth);
@@ -71,7 +111,8 @@ export async function createRoom(displayName: string): Promise<string> {
       hostId: user.uid,
       status: "lobby",
       location: null,
-      spyId: null,
+      spyIds: [],
+      spyCount: 1,
       startedAt: null,
       durationSeconds: GAME_DURATION_SECONDS,
       createdAt: serverTimestamp(),
@@ -132,7 +173,7 @@ export function subscribeRoom(
         onData(null);
         return;
       }
-      onData(snap.data() as Room);
+      onData(normalizeRoomFromFirestore(snap.data() as Record<string, unknown>, code));
     },
     (err) => onError?.(err as Error),
   );
@@ -184,16 +225,41 @@ export async function startGame(roomCode: string, uid: string): Promise<void> {
   const ids = playersSnap.docs.map((d) => d.id);
   if (ids.length < 2) throw new Error("Need at least 2 players");
 
-  const spyId = pickRandom(ids);
+  const maxSpies = Math.max(1, ids.length - 1);
+  const desired = typeof room.spyCount === "number" ? room.spyCount : 1;
+  const spySlots = Math.min(Math.max(1, Math.floor(desired)), maxSpies);
+  const spyIds = pickRandomDistinct(ids, spySlots);
   const location = pickRandom(LOCATIONS);
 
   await updateDoc(ref, {
     status: "playing",
-    spyId,
+    spyIds,
+    spyCount: spySlots,
     location,
     startedAt: serverTimestamp(),
     durationSeconds: GAME_DURATION_SECONDS,
   });
+}
+
+/** Host-only lobby setting: select how many spies the next assignment will pick. */
+export async function updateLobbySpyCount(roomCode: string, hostId: string, requested: number): Promise<void> {
+  const code = normalizeRoomCode(roomCode);
+  const ref = roomDocRef(code);
+  const roomSnap = await getDoc(ref);
+  if (!roomSnap.exists()) throw new Error("Room not found");
+  const roomRaw = roomSnap.data() as Room & Record<string, unknown>;
+  if (roomRaw.hostId !== hostId) throw new Error("Only the host can change settings");
+  if (roomRaw.status !== "lobby") return;
+
+  const playersSnap = await getDocs(playersCol(code));
+  const n = playersSnap.size;
+  const maxSpies = Math.max(1, n - 1);
+  const clamped = Math.min(Math.max(1, Math.floor(requested)), maxSpies);
+  const prev =
+    typeof roomRaw.spyCount === "number" && Number.isFinite(roomRaw.spyCount) ? Math.floor(roomRaw.spyCount) : 1;
+  if (prev === clamped) return;
+
+  await updateDoc(ref, { spyCount: clamped });
 }
 
 export async function transitionToVoting(roomCode: string): Promise<void> {
@@ -275,13 +341,17 @@ export async function startNewRound(roomCode: string, hostId: string): Promise<v
   const ids = playersSnap.docs.map((d) => d.id);
   if (ids.length < 2) throw new Error("Need at least 2 players");
 
-  const spyId = pickRandom(ids);
+  const maxSpies = Math.max(1, ids.length - 1);
+  const desired = typeof room.spyCount === "number" ? room.spyCount : 1;
+  const spySlots = Math.min(Math.max(1, Math.floor(desired)), maxSpies);
+  const spyIds = pickRandomDistinct(ids, spySlots);
   const location = pickRandom(LOCATIONS);
 
   await deleteAllVotes(code);
   await updateDoc(ref, {
     status: "playing",
-    spyId,
+    spyIds,
+    spyCount: spySlots,
     location,
     startedAt: serverTimestamp(),
     durationSeconds: GAME_DURATION_SECONDS,

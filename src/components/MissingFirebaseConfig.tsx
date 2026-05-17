@@ -4,7 +4,7 @@ export default function MissingFirebaseConfig() {
     /vercel\.app$|\.netlify\.app$|firebaseapp\.com$/i.test(window.location.hostname);
 
   return (
-    <div className="min-h-dvh bg-slate-950 px-4 py-12 text-slate-100">
+    <div className="min-h-dvh bg-slate-950 px-4 pb-safe pt-safe text-slate-100">
       <div className="mx-auto max-w-md space-y-6 rounded-2xl border border-amber-500/40 bg-slate-900/80 p-6">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200/90">Setup</p>
         <h1 className="text-2xl font-bold text-slate-50">Firebase is not configured</h1>
