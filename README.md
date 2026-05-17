@@ -68,11 +68,12 @@ Open the printed URL in several browsers or tabs to simulate multiplayer.
 ## Deploy to Vercel
 
 1. Push the repo or import it into [Vercel](https://vercel.com/).
-2. Confirm the preset is **Vite** if prompted.
-3. Add the six `VITE_FIREBASE_*` environment variables under Project → Settings → Environment Variables (matching `.env`).
-4. Deploy. The included `vercel.json` rewires unknown paths to `/index.html` so deep links such as `/r/ABCDE` work after refreshing.
+2. Confirm **Build Command** is `npm run build` and **Output Directory** is `dist` (often auto-detected for Vite).
+3. Under **Project → Settings → Environment Variables**, add the same six `VITE_FIREBASE_*` keys as in your local `.env` (these are injected at **build time** on Vercel).
+4. In **Firebase → Authentication → Settings → Authorized domains**, add your hostname only, e.g. `skyefall.vercel.app` (no `https://`).
+5. Deploy. The included `vercel.json` rewires unknown paths to `/index.html` so deep links such as `/r/ABCDE` work after refreshing.
 
-Lobby **Copy invite link** shares `{origin}/r/{roomCode}`.
+Lobby **Copy invite link** uses the current origin on Vercel. When developing on `localhost`, set `VITE_PUBLIC_APP_ORIGIN=https://YOUR-APP.vercel.app` in `.env` (no trailing slash) and restart `npm run dev` so copied links still point at production.
 
 ## Architecture notes
 
